@@ -103,10 +103,11 @@ Woden.prototype._onRequest = function( req, res ) {
 
     this.emit( 'request', req );
 
+    req.parsedUrl = urlParse(req.url);
+
     var payload = '',
-        arg = req.url.split( '?' ),
-        path = arg.shift( ),
-        query = qs.parse( arg.pop( ) ),
+        path = req.parsedUrl.pathname,
+        query = qs.parse( req.parsedUrl.query ),
         target = query.$url || '',
         key,
         self = this;
@@ -138,10 +139,18 @@ Woden.prototype._onRequest = function( req, res ) {
     
     // right now only get request are supported
     if ( req.method.toLowerCase() !== 'get' ) {
-        res.writeHead( 501 );
-        res.write( 'Methods that are not "GET" are not implemented in proxy cache' );
-        res.end( );
-        res.cache = true;
+        if ( this.options.proxyUnsupportedMethods ) {
+            req.cache = false;
+            self.proxy.web( req, res, {
+                target: req._target,
+                toProxy: req.url.length ? false : true
+            } );
+        } else {
+            res.writeHead( 501 );
+            res.write( 'Methods that are not "GET" are not implemented in proxy cache' );
+            res.end( );
+            res.cache = true;
+        }
         self.emit( 'reponse', res ); 
         return;
     }
@@ -232,12 +241,13 @@ Woden.prototype._cacheResponse = function( proxyRes, req ) {
         if ( timeout < 0 ) {
             return;
         }
-        
-        self.storageAdapter.set( {
-            key: key,
-            value: cache,
-            timeout: timeout
-        }, cached( cache ) );
+        if(req.cache !== false) {
+            self.storageAdapter.set( {
+                key: key,
+                value: cache,
+                timeout: timeout
+            }, cached( cache ) );
+        }
     } );
 };
 
